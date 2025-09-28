@@ -1,3 +1,1 @@
-# 🚀 Requirements
-
-Add requirements here
+JavaFX application
