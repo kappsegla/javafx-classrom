@@ -192,6 +192,7 @@ jobs:
 
           echo "has_tests=$has_tests" >> $GITHUB_OUTPUT
           echo "has_changes=$has_changes" >> $GITHUB_OUTPUT
+           echo "should_grade=$([[ $has_tests == 'true' && $has_changes == 'true' ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
 
       - name: Compilation Check
         id: compilation-check
@@ -214,9 +215,15 @@ jobs:
           max-score: 1
 
       - name: Autograding Reporter
+        if: ${{ steps.code-check.outputs.should_grade == 'true' }}
         uses: classroom-resources/autograding-grading-reporter@v1
         env:
           COMPILATION-CHECK_RESULTS: "${{steps.compilation-check.outputs.result}}"
           BASIC-TESTS_RESULTS: "${{steps.basic-tests.outputs.result}}"
         with:
           runners: compilation-check,basic-tests
+
+      - name: Reporter Skipped Notice
+        if: ${{ steps.code-check.outputs.should_grade != 'true' }}
+        run:
+          echo "🛑 Skipping reporter: No grading results available due to missing tests or unchanged code."
