@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   repository_dispatch:
 
 concurrency:
@@ -28,6 +31,7 @@ jobs:
 
       - name: Read assignment instructions
         id: instructions
+        if: ${{ vars.ENABLE_AI_FEEDBACK == 'true' }}
         run: |
           # Reads the content of the README.md file into an output variable.
           # The `EOF` marker is used to handle multi-line file content.
@@ -35,6 +39,7 @@ jobs:
 
       - name: Read source code
         id: source_code
+        if: ${{ vars.ENABLE_AI_FEEDBACK == 'true' }}
         run: |
           {
             echo 'source_code<<EOF'
@@ -48,6 +53,7 @@ jobs:
 
       - name: Read test code
         id: test_code
+        if: ${{ vars.ENABLE_AI_FEEDBACK == 'true' }}
         run: |
           {
             echo 'test_code<<EOF'
@@ -64,6 +70,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
       - name: Generate AI Feedback
         id: ai_feedback
+        if: ${{ vars.ENABLE_AI_FEEDBACK == 'true' }}
         run: |
           # This step sends the collected data to the OpenRouter API.
           INSTRUCTIONS=$(jq -Rs . <<'EOF'
@@ -122,29 +129,18 @@ jobs:
           echo "$FEEDBACK_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
       - name: Post Feedback as PR Comment ✍️
+        if: ${{ vars.ENABLE_AI_FEEDBACK == 'true' && github.event_name == 'pull_request' }}
         uses: actions/github-script@v8
         env:
           FEEDBACK_BODY: ${{ steps.ai_feedback.outputs.feedback }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const prNumber = context.payload.pull_request.number;
             const { owner, repo } = context.repo;
-            const targetTitle = "Feedback";
             const signature = "🤖 AI Feedback";
-
-            const { data: pullRequests } = await github.rest.pulls.list({
-              owner,
-              repo,
-              state: "open",
-              per_page: 100
-            });
-
-            const matchingPR = pullRequests.find(pr => pr.title.trim().toLowerCase() === targetTitle.toLowerCase());
-            if (!matchingPR) {
-              throw new Error(`No open pull request found with title '${targetTitle}'`);
-            }
-
-            const prNumber = matchingPR.number;
+            const timestamp = new Date().toISOString();
+            const newEntry = `🕒 _Posted on ${timestamp}_\n\n${process.env.FEEDBACK_BODY}\n\n---\n`;
 
             const { data: comments } = await github.rest.issues.listComments({
               owner,
@@ -158,14 +154,9 @@ jobs:
               c.body?.includes(signature)
             );
 
-            const timestamp = new Date().toISOString();
-            const newEntry = `🕒 _Posted on ${timestamp}_\n\n${process.env.FEEDBACK_BODY}\n\n---\n`;
-
             if (existing) {
-              // Extract previous entries and wrap them in a collapsible block
               const previousContent = existing.body.replace(/^### 🤖 AI Feedback\s*/, '').trim();
               const collapsed = `<details><summary>Previous Feedback</summary>\n\n${previousContent}\n</details>`;
-
               const updatedBody = `### ${signature}\n\n${newEntry}${collapsed}`;
               await github.rest.issues.updateComment({
                 owner,
@@ -173,7 +164,6 @@ jobs:
                 comment_id: existing.id,
                 body: updatedBody
               });
-              console.log(`🔄 Updated existing comment on PR #${prNumber}`);
             } else {
               const body = `### ${signature}\n\n${newEntry}`;
               await github.rest.issues.createComment({
@@ -182,7 +172,6 @@ jobs:
                 issue_number: prNumber,
                 body
               });
-              console.log(`🆕 Posted new comment on PR #${prNumber}`);
             }
       - name: Set up Java 25
         uses: actions/setup-java@v5
@@ -199,7 +188,7 @@ jobs:
           timeout: 10
           max-score: 1
 
-      - name: Basic Tests
+      - name: Tests
         id: basic-tests
         uses: classroom-resources/autograding-command-grader@v1
         with:
@@ -208,20 +197,10 @@ jobs:
           timeout: 10
           max-score: 1
 
-#      - name: Edge Case Tests
-#        id: edge-case-tests
-#        uses: classroom-resources/autograding-command-grader@v1
-#        with:
-#          test-name: Edge Case Tests
-#          command: mvn -ntp test -Dtest=EdgeCaseTest
-#          timeout: 10
-#          max-score: 1
-
       - name: Autograding Reporter
         uses: classroom-resources/autograding-grading-reporter@v1
         env:
           COMPILATION-CHECK_RESULTS: "${{steps.compilation-check.outputs.result}}"
           BASIC-TESTS_RESULTS: "${{steps.basic-tests.outputs.result}}"
-#          EDGE-CASE-TESTS_RESULTS: "${{steps.edge-case-tests.outputs.result}}"
         with:
           runners: compilation-check,basic-tests

@@ -54,6 +54,13 @@
                 <version>0.0.8</version>
                 <configuration>
                     <mainClass>com.example.HelloFX</mainClass>
+                    <options>
+                    <option>--enable-native-access=javafx.graphics</option>
+                    </options>
+                    <launcher>javafx</launcher>
+                    <stripDebug>true</stripDebug>
+                    <noHeaderFiles>true</noHeaderFiles>
+                    <noManPages>true</noManPages>
                 </configuration>
             </plugin>
         </plugins>
