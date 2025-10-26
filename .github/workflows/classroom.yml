@@ -225,5 +225,5 @@ jobs:
 
       - name: Reporter Skipped Notice
         if: ${{ steps.code-check.outputs.should_grade != 'true' }}
-        run:
+        run: |
           echo "🛑 Skipping reporter: No grading results available due to missing tests or unchanged code."
